@@ -65,24 +65,22 @@ export class MapLeafletComponent implements OnInit, OnChanges {
 
   ngOnChanges() {
     if (this.map) {
-      // remove all
-      this.map.removeLayer(this.mapGroupMarkers.residential);
-      this.map.removeLayer(this.mapGroupMarkers.commercial);
-      this.map.removeLayer(this.mapGroupMarkers.industrial);
-      this.map.removeLayer(this.mapGroupMarkers.land);
-      // add included
-      if (this.visibleMarkerType.includes(PropertyType.residential)) {
-        this.map.addLayer(this.mapGroupMarkers.residential);
-      }
-      if (this.visibleMarkerType.includes(PropertyType.commercial)) {
-        this.map.addLayer(this.mapGroupMarkers.commercial);
-      }
-      if (this.visibleMarkerType.includes(PropertyType.industrial)) {
-        this.map.addLayer(this.mapGroupMarkers.industrial);
-      }
-      if (this.visibleMarkerType.includes(PropertyType.land)) {
-        this.map.addLayer(this.mapGroupMarkers.land);
-      }
+      this.toggleVisibleMarkerType(PropertyType.residential,
+        this.visibleMarkerType.includes(PropertyType.residential));
+      this.toggleVisibleMarkerType(PropertyType.commercial,
+        this.visibleMarkerType.includes(PropertyType.commercial));
+      this.toggleVisibleMarkerType(PropertyType.industrial,
+        this.visibleMarkerType.includes(PropertyType.industrial));
+      this.toggleVisibleMarkerType(PropertyType.land,
+        this.visibleMarkerType.includes(PropertyType.land));
+    }
+  }
+
+  private toggleVisibleMarkerType(type: PropertyType, visible: boolean) {
+    if (visible) {
+      this.map.addLayer(this.mapGroupMarkers[type]);
+    } else {
+      this.map.removeLayer(this.mapGroupMarkers[type]);
     }
   }
 
@@ -126,13 +124,7 @@ export class MapLeafletComponent implements OnInit, OnChanges {
     if (this.clickAddMarker) {
       // set click event handler
       this.map.on('click', (e: L.LeafletMouseEvent) => {
-        if (this.pendingMarker.length) {
-          this.pendingMarker.forEach(marker => {
-            this.map.removeLayer(marker);
-          });
-        }
-        this.pinMarker(e.latlng);
-        this.clickedAt.emit(e.latlng);
+        this.onClick(e);
       });
     }
 
@@ -142,39 +134,37 @@ export class MapLeafletComponent implements OnInit, OnChanges {
     }
   }
 
-  private setMapMarkers() {
-    let residential = [];
-    let commercial = [];
-    let industrial = [];
-    let land = [];
+  private onClick(e: L.LeafletMouseEvent): void {
+    if (this.pendingMarker.length) {
+      this.pendingMarker.forEach(marker => {
+        this.map.removeLayer(marker);
+      });
+    }
+    this.pinMarker(e.latlng);
+    this.clickedAt.emit(e.latlng);
+  }
 
+
+  private getLayerGroup(group: any): any {
+    return group.map((property: Property) => property.position
+      ? this.addPropertyMarker(property) : undefined).filter(property => property !== undefined);
+  }
+
+  private getMarkers(): any {
     const group = this.properties.reduce((arr, acc): any => {
       arr[acc.type] = [...arr[acc.type] || [], acc];
       return arr;
     }, {});
-
-    if (group.residential && group.residential.length) {
-      residential = group.residential.map((property: Property) => property.position
-        ? this.addPropertyMarker(property) : undefined).filter(property => property !== undefined);
-    }
-    if (group.commercial && group.commercial.length) {
-      commercial = group.commercial.map((property: Property) => property.position
-        ? this.addPropertyMarker(property) : undefined).filter(property => property !== undefined);
-    }
-    if (group.industrial && group.industrial.length) {
-      industrial = group.industrial.map((property: Property) => property.position
-        ? this.addPropertyMarker(property) : undefined).filter(property => property !== undefined);
-    }
-    if (group.land && group.land.length) {
-      land = group.land.map((property: Property) => property.position
-        ? this.addPropertyMarker(property) : undefined).filter(property => property !== undefined);
-    }
-    this.mapGroupMarkers = {
-      residential: L.layerGroup(residential),
-      commercial: L.layerGroup(commercial),
-      industrial: L.layerGroup(industrial),
-      land: L.layerGroup(land)
+    return {
+      residential: this.getLayerGroup(group.residential),
+      commercial: this.getLayerGroup(group.commercial),
+      industrial: this.getLayerGroup(group.industrial),
+      land: this.getLayerGroup(group.land)
     };
+  }
+
+  private setMapMarkers() {
+    this.mapGroupMarkers = this.getMarkers();
     const ctrl = L.control.layers(this.mapGroupMarkers);
     ctrl.addTo(this.map);
     ctrl.remove();
